@@ -1,5 +1,5 @@
 import logging
-from .instructions import Instruction, Bubble, HaltSignal, RawDependencySignal
+from .instructions import Instruction, HaltInstruction, Bubble, HaltSignal, RawDependencySignal
 from .memories import Memory, RegisterSet
 
 
@@ -17,11 +17,11 @@ class Cpu:
     class Pipeline:
 
         class PipelineStage:
-            IF = 0
-            ID = 1
-            EX = 2
-            MEM = 3
-            WB = 4
+            IF = 1
+            ID = 2
+            EX = 3
+            MEM = 4
+            WB = 5
 
         def __init__(self):
             self._pipeline = {
@@ -36,9 +36,8 @@ class Cpu:
             logger.debug("Processing fetch phase.")
 
             self.__move(self.PipelineStage.IF, self.PipelineStage.ID)
+            logger.info("Loading into IF stage instruction '%s'." % next_instruction)
             self.__set(self.PipelineStage.IF, next_instruction)
-
-            logger.debug("Fetch phase completed.")
 
         def decode(self):
             """
@@ -82,17 +81,26 @@ class Cpu:
         def writeback(self):
             logger.debug("Processing writeback phase.")
 
-            instruction = self.__get(self.PipelineStage.MEM)
+            instruction = self.__get(self.PipelineStage.WB)
             instruction.writeback()
 
             logger.debug("Writeback phase completed.")
 
         def is_empty(self):
-            empty = True
-            for stage in [self.PipelineStage.IF, self.PipelineStage.ID, self.PipelineStage.EX, self.PipelineStage.MEM, self.PipelineStage.WB]:
-                if not isinstance(self.__get(stage), Bubble):
-                    empty = False
-            return empty
+            """ A pipe is empty if after the HALT instruction there's only BUBBLEs """
+            halt_instruction_found = False
+            no_more_instructions = True
+
+            for phase, instruction in self._pipeline.items():
+                if halt_instruction_found:
+                    if not isinstance(instruction, Bubble):  # Normal instruction detected after HALT
+                        no_more_instructions = False
+
+                if isinstance(instruction, HaltInstruction):
+                    halt_instruction_found = True
+
+            return halt_instruction_found and no_more_instructions
+
 
         def flush(self):
             """
@@ -101,11 +109,16 @@ class Cpu:
             self.__set(self.PipelineStage.IF, Bubble())
 
         def stall(self, phase):
+            """
+            Instead of moving the instruction of the current phase to the next one,
+            a bubble is inserted in the next phase and the instructions
+            of the previous phases are not neither moved nor executed.
+            """
             self.__set(phase+1, Bubble())
 
         def __move(self, stage_src, stage_dst):
-            logger.debug("Moving instruction '%s' from phase %s to phase %s."
-                        % (self._pipeline[stage_src], stage_src, stage_dst))
+            logger.info("Moving from phase %s to phase %s instruction '%s' ."
+                        % (stage_src, stage_dst, self._pipeline[stage_src]))
 
             self._pipeline[stage_dst] = self._pipeline[stage_src]
 
@@ -113,12 +126,11 @@ class Cpu:
             return self._pipeline[stage]
 
         def __set(self, stage, instruction: Instruction):
-            logger.info("Loading into stage %d instruction '%s'." % (stage, instruction))
             self._pipeline[stage] = instruction
 
         def __repr__(self):
-            return ("\n1. %s\n2. %s\n3. %s\n4. %s\n5. %s"
-                  % (self.__get(self.PipelineStage.IF),
+            return ("\n1. %s\n2. %s\n3. %s\n4. %s\n5. %s" %
+                    (self.__get(self.PipelineStage.IF),
                      self.__get(self.PipelineStage.ID),
                      self.__get(self.PipelineStage.EX),
                      self.__get(self.PipelineStage.MEM),
@@ -167,6 +179,7 @@ class Cpu:
             else:
                 " Programming error "
                 raise RuntimeError()
+
             current_phase = self.Pipeline.PipelineStage.IF
             self._pipeline.fetch(next_instruction)
 
@@ -175,22 +188,16 @@ class Cpu:
             if self.is_running():
                 self.set_stopping()
                 self._pipeline.flush()
-                self._pipeline.fetch(Bubble())
 
-            elif self.is_stopping():
-                self._pipeline.fetch(Bubble())
-
-            else:
-                " Programming error "
-                raise RuntimeError()
+            self._pipeline.fetch(Bubble())
 
         except RawDependencySignal:
             logger.info("RAW dependency signal received.")
             self._pipeline.stall(current_phase)
 
         finally:
-            logger.info("Step done.")
             logger.info(self._pipeline)
+            logger.info("Step done.\n\n")
 
             if self.is_stopping() and self._pipeline.is_empty():
                 self.set_halted()

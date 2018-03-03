@@ -15,10 +15,8 @@ class Register(object):
         logger.debug("Storing element in register %d." % self._register_id)
         self._data = data
 
-    def get(self):
+    def get_data(self):
         logger.debug("Returning element from register %d." % self._register_id)
-        if self.is_locked():
-            raise ReadLockedRegisterError(self._register_id)
         return self._data
 
     def lock(self):
@@ -34,8 +32,8 @@ class Register(object):
         return self._semaphore > 0
 
     def __repr__(self):
-        # return "R%d[%d][Locked: %s]" % (self._register_id, self._data, self.is_locked())
-        return "R%d" % self._register_id
+        return "R%d[%d][Locked: %s]" % (self._register_id, self._data, self.is_locked())
+        # return "R%d" % self._register_id
 
 
 class RegisterSet(object):
@@ -74,8 +72,8 @@ class Memory:
         except IndexError:
             raise InvalidAddressError(addr)
 
-    def load_program(self, program: list, offset=0):
-        logger.info("Loading program in memory from addr %d." % offset)
+    def write_program(self, program: list, offset=0):
+        logger.info("Writing program in memory from addr %d." % offset)
         for index, instruction in enumerate(program):
             self.set(index + offset, instruction)
         logger.info("Program loaded.")
@@ -104,13 +102,3 @@ class RegisterError(Exception):
 class InvalidRegisterError(RegisterError):
     def __str__(self):
         return "Register %d does not exist." % self._register_id
-
-
-class WriteToLockedRegisterError(RegisterError):
-    def __str__(self):
-        return "Unable to write a locked register %d." % self._register_id
-
-
-class ReadLockedRegisterError(RegisterError):
-    def __str__(self):
-        return "Unable to read a locked register %d." % self._register_id

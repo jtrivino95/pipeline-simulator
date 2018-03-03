@@ -1,5 +1,5 @@
 import logging
-from .memories import Register, RegisterSet, Memory, ReadLockedRegisterError
+from .memories import Register, RegisterSet, Memory
 
 
 logger = logging.getLogger(__name__)
@@ -8,24 +8,24 @@ logger = logging.getLogger(__name__)
 class Instruction:
 
     def fetch(self):
-        pass
+        logger.info("Executing fetch phase of instruction " + self.__repr__())
 
     def decode(self):
-        pass
+        logger.info("Executing decode phase of instruction " + self.__repr__())
 
     def execute(self):
-        pass
+        logger.info("Executing execute phase of instruction " + self.__repr__())
 
     def memory(self):
-        pass
+        logger.info("Executing memory phase of instruction " + self.__repr__())
 
     def writeback(self):
-        pass
+        logger.info("Executing writeback phase of instruction " + self.__repr__())
 
 
 class Bubble(Instruction):
-    def __str__(self):
-        return "Bubble"
+    def __repr__(self):
+        return "( )"
 
 
 class AluInstruction(Instruction):
@@ -44,24 +44,25 @@ class AluInstruction(Instruction):
         self._tmp = None  # Used for store results before writing them to rd on WB phase
 
     def decode(self):
-        self._rd.lock()
-
-    def execute(self):
-        try:
-            if self._opcode == 'ADD':
-                self._tmp = self._rs.get() + self._rt.get()
-            elif self._opcode == 'MULT':
-                self._tmp = self._rs.get() * self._rt.get()
-            elif self._opcode == 'SUB':
-                self._tmp = self._rs.get() - self._rt.get()
-            elif self._opcode == 'DIV':
-                self._tmp = self._rs.get() / self._rt.get()
-
-        except ReadLockedRegisterError:
-            logging.warning('readlockedregister')
+        super(AluInstruction, self).decode()
+        if self._rs.is_locked() or self._rt.is_locked():
             raise RawDependencySignal()
 
+    def execute(self):
+        super(AluInstruction, self).execute()
+        self._rd.lock()
+        if self._opcode == 'ADD':
+            self._tmp = self._rs.get_data() + self._rt.get_data()
+        elif self._opcode == 'MULT':
+            self._tmp = self._rs.get_data() * self._rt.get_data()
+        elif self._opcode == 'SUB':
+            self._tmp = self._rs.get_data() - self._rt.get_data()
+        elif self._opcode == 'DIV':
+            self._tmp = self._rs.get_data() / self._rt.get_data()
+            self._tmp = int(self._tmp)  # integer division
+
     def writeback(self):
+        super(AluInstruction, self).writeback()
         self._rd.unlock()
         self._rd.set(self._tmp)
 

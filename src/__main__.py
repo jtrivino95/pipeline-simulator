@@ -1,30 +1,26 @@
 import logging
+import sys
 from .core import cpu, memories, instructions
 
 
 if __name__ == '__main__':
-    logging.basicConfig(filename='debug.log', level=logging.INFO)
+    logging.basicConfig(stream=sys.stdout, level=logging.INFO)
     source_file = 'code.txt'
     registers = memories.RegisterSet()
     memory = memories.Memory(1024)
 
     parser = instructions.Parser(registers=registers, memory=memory)
     program = parser.parse(source_file)
-    memory.load_program(program)
+    memory.write_program(program)
     cpu = cpu.Cpu(registers=registers, memory=memory)
 
-    regvalues = [5, 7, 3, 1, 6, 12, 18, 22]
+    regvalues = [0, 2, 1, 3, 30, 100, 100, 100]
     for i, val in enumerate(regvalues):
         registers.get(i).set(val)
 
     cpu.start()
     while not cpu.is_halted():
-        try:
-            cpu.step()
-        except Exception as e:
-            print(e)
-            break
+        cpu.step()
 
-    for i in range(11):
-
-        print(str(registers.get(i)) + ': ' + str(registers.get(i).get()))
+    for i in range(8):
+        print(str(registers.get(i)) + ': ' + str(registers.get(i).get_data()))
