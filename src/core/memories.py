@@ -58,7 +58,7 @@ class Memory:
         for i in range(size_in_words):
             self._memory.append(0)
 
-    def get(self, addr):
+    def get_data(self, addr):
         logger.debug("Returning from memory element in %d." % addr)
         try:
             return self._memory[addr]

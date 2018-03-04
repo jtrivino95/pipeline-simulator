@@ -14,7 +14,7 @@ if __name__ == '__main__':
     memory.write_program(program)
     cpu = cpu.Cpu(registers=registers, memory=memory)
 
-    regvalues = [0, 2, 1, 3, 30, 100, 100, 100]
+    regvalues = [0, 91, 1, 3, 31, 100, 100, 100]
     for i, val in enumerate(regvalues):
         registers.get(i).set(val)
 

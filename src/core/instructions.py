@@ -47,10 +47,10 @@ class AluInstruction(Instruction):
         super(AluInstruction, self).decode()
         if self._rs.is_locked() or self._rt.is_locked():
             raise RawDependencySignal()
+        self._rd.lock()
 
     def execute(self):
         super(AluInstruction, self).execute()
-        self._rd.lock()
         if self._opcode == 'ADD':
             self._tmp = self._rs.get_data() + self._rt.get_data()
         elif self._opcode == 'MULT':
@@ -76,11 +76,51 @@ class MemInstruction(Instruction):
         'STORE',
     ]
 
-    def __init__(self, opcode, rs: Register, rd: Register, offset: int):
+    def __init__(self, opcode, rs: Register, rd: Register, offset: int, memory: Memory):
         self._opcode = opcode
         self._rs = rs
         self._rd = rd
         self._offset = offset
+        self._computed_mem_addr = None
+        self._tmp = None
+        self._memory = memory
+
+    def decode(self):
+        super(MemInstruction, self).decode()
+        if self._opcode == 'LOAD':
+            if self._rs.is_locked():
+                raise RawDependencySignal()
+            self._rd.lock()
+
+        else:  # self._opcode == STORE
+            if self._rs.is_locked() or self._rd.is_locked():
+                raise RawDependencySignal()
+
+    def execute(self):
+        super(MemInstruction, self).execute()
+        if self._opcode == 'LOAD':
+            self._computed_mem_addr = self._rs.get_data() + self._offset
+
+        else:  # self._opcode == STORE
+            self._computed_mem_addr = self._rd.get_data() + self._offset
+
+    def memory(self):
+        super(MemInstruction, self).memory()
+        if self._opcode == 'LOAD':
+            self._tmp = self._memory.get_data(self._computed_mem_addr)
+
+        else:  # self._opcode == STORE
+            register_data = self._rs.get_data()
+            self._memory.set(self._computed_mem_addr, register_data)
+
+    def writeback(self):
+        super(MemInstruction, self).writeback()
+        if self._opcode == 'LOAD':
+            self._rd.unlock()
+            self._rd.set(self._tmp)
+
+        else:
+            pass
 
     def __repr__(self):
         return "%s %s, %s, (offset: %d)" % (self._opcode, self._rd, self._rs, self._offset)
@@ -137,6 +177,7 @@ class Parser:
 
     def __init__(self, registers: RegisterSet, memory: Memory):
         self._registers = registers
+        self._memory = memory
 
     def parse(self, filepath: str):
         logger.info("Parsing file '%s'." % filepath)
@@ -193,16 +234,22 @@ class Parser:
                 if not (op1 and op2):
                     raise NotEnoughOperandsError(nline)
 
-                if opcode == 'LOAD':
-                    offset = self.__get_offset(op2)
-                else:  # opcode == 'STORE'
-                    offset = self.__get_offset(op1)
+                offset = self.__get_offset(op2)
 
-                instruction = MemInstruction(
-                    opcode=opcode,
-                    rd=self.__get_register(op1),
-                    rs=self.__get_register(op2),
-                    offset=offset)
+                if opcode == 'LOAD':
+                    instruction = MemInstruction(
+                        opcode=opcode,
+                        rd=self.__get_register(op1),
+                        rs=self.__get_register(op2),
+                        offset=offset,
+                        memory=self._memory)
+                else:  # opcode == 'STORE'
+                    instruction = MemInstruction(
+                        opcode=opcode,
+                        rd=self.__get_register(op2),
+                        rs=self.__get_register(op1),
+                        offset=offset,
+                        memory=self._memory)
 
             elif opcode in BranchInstruction.opcodes:
                 if not (op1 and op2 and op3):

@@ -9,10 +9,9 @@ logger = logging.getLogger(__name__)
 class Cpu:
 
     class CpuStatus:
-        READY = 0
-        RUNNING = 1
-        STOPPING = 2
-        HALTED = 3
+        RUNNING = 0
+        STOPPING = 1
+        HALTED = 2
 
     class Pipeline:
 
@@ -33,18 +32,14 @@ class Cpu:
             }
 
         def fetch(self, next_instruction: Instruction):
-            logger.debug("Processing fetch phase.")
-
             self.__move(self.PipelineStage.IF, self.PipelineStage.ID)
             logger.info("Loading into IF stage instruction '%s'." % next_instruction)
             self.__set(self.PipelineStage.IF, next_instruction)
 
         def decode(self):
             """
-            It is possible that decode() throws a HaltSignal, so
-            in the instruction will move from ID to EX in that case also
+            It is possible that decode() throws a HaltSignal, the instruction will be moved from ID to EX anyway
             """
-            logger.debug("Processing decode phase.")
             instruction = self.__get(self.PipelineStage.ID)
 
             try:
@@ -55,36 +50,23 @@ class Cpu:
                 halt_signal = True
 
             self.__move(self.PipelineStage.ID, self.PipelineStage.EX)
-            logger.debug("Decode phase completed.")
 
             if halt_signal:
                 raise HaltSignal()
 
         def execute(self):
-            logger.debug("Processing execute phase.")
-
             instruction = self.__get(self.PipelineStage.EX)
             instruction.execute()
             self.__move(self.PipelineStage.EX, self.PipelineStage.MEM)
 
-            logger.debug("Execute phase completed.")
-
         def memory(self):
-            logger.debug("Processing memory phase.")
-
             instruction = self.__get(self.PipelineStage.MEM)
             instruction.memory()
             self.__move(self.PipelineStage.MEM, self.PipelineStage.WB)
 
-            logger.debug("Memory phase completed.")
-
         def writeback(self):
-            logger.debug("Processing writeback phase.")
-
             instruction = self.__get(self.PipelineStage.WB)
             instruction.writeback()
-
-            logger.debug("Writeback phase completed.")
 
         def is_empty(self):
             """ A pipe is empty if after the HALT instruction there's only BUBBLEs """
@@ -101,7 +83,6 @@ class Cpu:
 
             return halt_instruction_found and no_more_instructions
 
-
         def flush(self):
             """
             Replaces the instruction in the IF phase with a Bubble
@@ -112,8 +93,12 @@ class Cpu:
             """
             Instead of moving the instruction of the current phase to the next one,
             a bubble is inserted in the next phase and the instructions
-            of the previous phases are not neither moved nor executed.
+            of the previous phases are neither moved nor executed.
             """
+            if phase == self.PipelineStage.WB:
+                """ Programming error """
+                raise RuntimeError
+
             self.__set(phase+1, Bubble())
 
         def __move(self, stage_src, stage_dst):
@@ -171,7 +156,7 @@ class Cpu:
 
             if self.is_running():
                 " If RUNNING, the next instruction is got from the memory "
-                next_instruction = self._memory.get(self._pc)
+                next_instruction = self._memory.get_data(self._pc)
                 self._pc += 1
             elif self.is_stopping():
                 " If STOPPING, the next instruction is a Bubble "
@@ -187,7 +172,7 @@ class Cpu:
             logger.info("Halt signal received.")
             if self.is_running():
                 self.set_stopping()
-                self._pipeline.flush()
+                self._pipeline.flush()  # Last fetched instruction is wrong, it must be a BUBBLE
 
             self._pipeline.fetch(Bubble())
 
