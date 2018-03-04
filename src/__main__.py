@@ -2,25 +2,27 @@ import logging
 import sys
 from .core import cpu, memories, instructions
 
+logger = logging.getLogger(__name__)
+
 
 if __name__ == '__main__':
+    source_file = sys.argv[1]
     logging.basicConfig(stream=sys.stdout, level=logging.INFO)
-    source_file = 'code.txt'
     registers = memories.RegisterSet()
-    memory = memories.Memory(1024)
-
+    memory = memories.Memory(2048)
     parser = instructions.Parser(registers=registers, memory=memory)
     program = parser.parse(source_file)
     memory.write_program(program)
-    cpu = cpu.Cpu(registers=registers, memory=memory)
+    cpu_instance = cpu.Cpu(registers=registers, memory=memory)
 
-    regvalues = [0, 91, 1, 3, 31, 100, 100, 100]
-    for i, val in enumerate(regvalues):
-        registers.get(i).set(val)
+    registers.get(0).set(0)
+    registers.get(1).set(1)
+    registers.get(11).set(11)
 
-    cpu.start()
-    while not cpu.is_halted():
-        cpu.step()
+    cpu_instance.start()
+    while not cpu_instance.is_halted():
+        cpu_instance.step()
 
-    for i in range(8):
-        print(str(registers.get(i)) + ': ' + str(registers.get(i).get_data()))
+    logger.info("Cycles: %d" % cpu._statistics['cycles'])
+    logger.info("Instructions: %d" % cpu._statistics['instructions'])
+    logger.info("CPI: %f" % (cpu._statistics['cycles'] / cpu._statistics['instructions']))

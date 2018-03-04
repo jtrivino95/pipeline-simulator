@@ -12,7 +12,7 @@ class Register(object):
         self._semaphore = 0
 
     def set(self, data):
-        logger.debug("Storing element in register %d." % self._register_id)
+        logger.info("Storing data %d in register %d." % (data, self._register_id))
         self._data = data
 
     def get_data(self):
@@ -20,11 +20,11 @@ class Register(object):
         return self._data
 
     def lock(self):
-        logger.info("Locking register %d." % self._register_id)
+        logger.debug("Locking register %d." % self._register_id)
         self._semaphore += 1
 
     def unlock(self):
-        logger.info("Unlocking register %d." % self._register_id)
+        logger.debug("Unlocking register %d." % self._register_id)
         if self._semaphore > 0:
             self._semaphore -= 1
 
@@ -65,10 +65,10 @@ class Memory:
         except IndexError:
             raise InvalidAddressError(addr)
 
-    def set(self, addr, element):
-        logger.debug("Storing in memory element in %d." % addr)
+    def set(self, addr, data):
+        logger.info("Storing in memory data %s in address %d." % (data, addr))
         try:
-            self._memory[addr] = element
+            self._memory[addr] = data
         except IndexError:
             raise InvalidAddressError(addr)
 
@@ -81,7 +81,7 @@ class Memory:
     def __repr__(self):
         dump = ""
         for i in range(self._size_in_words):
-            dump += "0x%x:\t%s\n" % (i, self._memory[i])
+            dump += "%d:\t%s\n" % (i, self._memory[i])
         return dump
 
 

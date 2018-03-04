@@ -1,10 +1,14 @@
 import logging
-from .instructions import Instruction, HaltInstruction, Bubble, HaltSignal, RawDependencySignal
+from .instructions import Instruction, HaltInstruction, Bubble, HaltSignal, RawDependencySignal, JumpSignal
 from .memories import Memory, RegisterSet
 
 
 logger = logging.getLogger(__name__)
 
+_statistics = {
+    'cycles': 0,
+    'instructions': 0,
+}
 
 class Cpu:
 
@@ -43,16 +47,19 @@ class Cpu:
             instruction = self.__get(self.PipelineStage.ID)
 
             try:
-                halt_signal = False
+                signal = None
                 instruction.decode()
 
-            except HaltSignal:
-                halt_signal = True
+            except HaltSignal as s:
+                signal = s
+
+            except JumpSignal as s:
+                signal = s
 
             self.__move(self.PipelineStage.ID, self.PipelineStage.EX)
 
-            if halt_signal:
-                raise HaltSignal()
+            if signal:
+                raise signal
 
         def execute(self):
             instruction = self.__get(self.PipelineStage.EX)
@@ -67,6 +74,9 @@ class Cpu:
         def writeback(self):
             instruction = self.__get(self.PipelineStage.WB)
             instruction.writeback()
+
+            if not isinstance(instruction, Bubble):
+                _statistics['instructions'] += 1
 
         def is_empty(self):
             """ A pipe is empty if after the HALT instruction there's only BUBBLEs """
@@ -127,9 +137,6 @@ class Cpu:
         self._pc = 0
         self._pipeline = self.Pipeline()
         self._status = self.CpuStatus.HALTED
-        self._statistics = {
-            'cycles': 0,
-        }
 
     def start(self):
         self.set_running()
@@ -138,7 +145,7 @@ class Cpu:
         if self.is_halted():
             raise HaltedCpuError()
 
-        logger.info("Processing step %d." % self._statistics['cycles'])
+        logger.info("Processing step %d." % _statistics['cycles'])
         current_phase = None
 
         try:
@@ -180,6 +187,24 @@ class Cpu:
             logger.info("RAW dependency signal received.")
             self._pipeline.stall(current_phase)
 
+        except JumpSignal as s:
+            logger.info("Jump signal received.")
+            self._pipeline.flush()
+            self._pc = s.addr
+
+            if self.is_running():
+                " If RUNNING, the next instruction is got from the memory "
+                next_instruction = self._memory.get_data(self._pc)
+                self._pc += 1
+            elif self.is_stopping():
+                " If STOPPING, the next instruction is a Bubble "
+                next_instruction = Bubble()
+            else:
+                " Programming error "
+                raise RuntimeError()
+
+            self._pipeline.fetch(next_instruction)
+
         finally:
             logger.info(self._pipeline)
             logger.info("Step done.\n\n")
@@ -187,7 +212,7 @@ class Cpu:
             if self.is_stopping() and self._pipeline.is_empty():
                 self.set_halted()
 
-            self._statistics['cycles'] += 1
+            _statistics['cycles'] += 1
 
     def is_halted(self):
         return self._status == self.CpuStatus.HALTED

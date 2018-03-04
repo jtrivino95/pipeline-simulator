@@ -129,8 +129,7 @@ class MemInstruction(Instruction):
 class BranchInstruction(Instruction):
     opcodes = [
         'BEQ',
-        'BGT',
-        'BLT'
+        'BNE'
     ]
 
     def __init__(self, opcode, rs: Register, rt: Register, imm: int):
@@ -138,6 +137,18 @@ class BranchInstruction(Instruction):
         self._rs = rs
         self._rt = rt
         self._imm = imm
+
+    def decode(self):
+        if self._rs.is_locked() or self._rt.is_locked():
+            raise RawDependencySignal()
+
+        if self._opcode == 'BEQ':
+            if self._rs.get_data() == self._rt.get_data():
+                raise JumpSignal(self._imm)
+
+        elif self._opcode == 'BNE':
+            if self._rs.get_data() != self._rt.get_data():
+                raise JumpSignal(self._imm)
 
     def __repr__(self):
         return "%s %s, %s, 0x%x" % (self._opcode, self._rs, self._rt, self._imm)
@@ -151,6 +162,9 @@ class JumpInstruction(Instruction):
     def __init__(self, opcode, imm: int):
         self._opcode = opcode
         self._imm = imm
+
+    def decode(self):
+        raise JumpSignal(self._imm)
 
     def __repr__(self):
         return "%s 0x%x" % (self._opcode, self._imm)
@@ -173,7 +187,7 @@ class HaltInstruction(Instruction):
 
 class Parser:
     _instruction_regex = r"^((?P<label>\w*):\s)?(?P<opcode>\w*)\s*(?P<op1>[a-zA-Z0-9|(|)]*)?(,\s" \
-            r"*(?P<op2>[a-zA-Z0-9|(|)]*))?(,\s*(?P<op3>\w*))?$"
+            r"*(?P<op2>[a-zA-Z0-9|(|)]*))?(,\s*(?P<op3>\w*))?([\s|\t]*#.*)?$"
 
     def __init__(self, registers: RegisterSet, memory: Memory):
         self._registers = registers
@@ -391,3 +405,8 @@ class HaltSignal(Exception):
 
 class RawDependencySignal(Exception):
     pass
+
+
+class JumpSignal(Exception):
+    def __init__(self, addr):
+        self.addr = addr

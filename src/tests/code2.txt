@@ -1,0 +1,13 @@
+ADD R5, R0, R1          # a = 1
+ADD R6, R0, R1          # b = 1
+ADD R8, R0, R0          # i = 0
+FORI: JMP FORJ          # while a != 11:
+FORJ: MULT R7, R5, R6   # while b != 11: c = a * b
+STORE R7, 1000(R8)      # MEM[i+1000] = c
+ADD R6, R6, R1          # b = b + 1
+ADD R8, R8, R1          # i = i + 1
+BNE R6, R11, FORJ
+ADD R6, R0, R1          # b = 1
+ADD R5, R5, R1
+BNE R5, R11, FORI
+HALT
