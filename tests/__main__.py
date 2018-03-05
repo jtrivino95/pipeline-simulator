@@ -1,5 +1,5 @@
 import unittest
-from src.core import cpu, memories, instructions
+from pipeline_simulator.core import memories, cpu, instructions
 
 
 class TestPipelineMethods(unittest.TestCase):
@@ -9,7 +9,7 @@ class TestPipelineMethods(unittest.TestCase):
         Test if parser creates correct Instruction and Register instances
         """
 
-        source_file = 'src/tests/code_test_parser.txt'
+        source_file = 'tests/programs/code_test_parser.txt'
         registers = memories.RegisterSet()
         memory = memories.Memory(1024)
         parser = instructions.Parser(registers=registers, memory=memory)
@@ -62,7 +62,7 @@ class TestPipelineMethods(unittest.TestCase):
         self.assertEqual(program[7]._imm, 7)
 
     def test_pipeline_code1(self):
-        source_file = 'src/tests/code1.txt'
+        source_file = 'tests/programs/code1.txt'
         registers = memories.RegisterSet()
         memory = memories.Memory(1024)
         parser = instructions.Parser(registers=registers, memory=memory)
@@ -107,7 +107,7 @@ class TestPipelineMethods(unittest.TestCase):
         self.assertEqual(registers.get(7).get_data(), 0)
 
     def test_pipeline_code2(self):
-        source_file = 'src/tests/code2.txt'
+        source_file = 'tests/programs/code2.txt'
         registers = memories.RegisterSet()
         memory = memories.Memory(2048)
         parser = instructions.Parser(registers=registers, memory=memory)
