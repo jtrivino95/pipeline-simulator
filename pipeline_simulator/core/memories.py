@@ -39,9 +39,14 @@ class Register(object):
 class RegisterSet(object):
     _registers = []
 
-    def __init__(self):
-        for i in range(32):
+    def __init__(self, registers_file=None, num_registers=32):
+        for i in range(num_registers):
             self._registers.append(Register(i))
+
+        if registers_file:
+            with open(registers_file, 'r') as f:
+                for i, value in enumerate(f):
+                    self._registers[i].set(int(value))
 
     def get(self, register_id):
         try:
