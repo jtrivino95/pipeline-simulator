@@ -123,7 +123,7 @@ class MemInstruction(Instruction):
             pass
 
     def __repr__(self):
-        return "%s %s, %s, (offset: %d)" % (self._opcode, self._rd, self._rs, self._offset)
+        return "%s %s, %d(%s)" % (self._opcode, self._rd, self._offset, self._rs)
 
 
 class BranchInstruction(Instruction):

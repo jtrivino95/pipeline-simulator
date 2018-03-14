@@ -1,4 +1,5 @@
 import logging
+import collections
 from .instructions import Instruction, HaltInstruction, Bubble, HaltSignal, RawDependencySignal, JumpSignal
 from .memories import Memory, RegisterSet
 
@@ -9,6 +10,7 @@ _statistics = {
     'cycles': 0,
     'instructions': 0,
 }
+
 
 class Cpu:
 
@@ -26,6 +28,79 @@ class Cpu:
             MEM = 4
             WB = 5
 
+            @classmethod
+            def to_str(cls, stage):
+                if stage == cls.IF:
+                    return 'F'
+                elif stage == cls.ID:
+                    return 'D'
+                elif stage == cls.EX:
+                    return 'X'
+                elif stage == cls.MEM:
+                    return 'M'
+                elif stage == cls.WB:
+                    return 'W'
+                else:
+                    " Programming error "
+                    raise RuntimeError()
+
+        class PipelineChronogram:
+
+            def __init__(self):
+                self._current_cycle = 0
+                self._chronogram = collections.OrderedDict()
+                self._instruction_map = {}
+
+            def increase_cycle(self):
+                self._current_cycle += 1
+
+            def set_instruction_stage(self, instruction_id, instruction_str, stage):
+                self.__add_instruction(instruction_id, instruction_str)
+                self._chronogram[instruction_id][self._current_cycle] = stage
+
+            def __add_instruction(self, instruction_id, instruction_str):
+                if instruction_id not in self._chronogram:
+                    self._chronogram[instruction_id] = collections.OrderedDict()
+                    self._instruction_map[instruction_id] = instruction_str
+
+            def print(self):
+                # Header
+                print("\t\t\t\t\t|\t", end='')
+                for i in range(1, _statistics['cycles']):
+                    print(str(i) + "\t", end='')
+                print("")
+
+                # Instructions chronogram
+                for instruction_id, cycles in self._chronogram.items():
+                    instruction_str = self._instruction_map[instruction_id]
+
+                    if len(instruction_str) < 4:
+                        print(instruction_str + "\t\t\t\t\t|\t", end='')
+                    elif len(instruction_str) < 8:
+                        print(instruction_str + "\t\t\t\t|\t", end='')
+                    elif len(instruction_str) < 12:
+                        print(instruction_str + "\t\t\t|\t", end='')
+                    elif len(instruction_str) < 16:
+                        print(instruction_str + "\t\t|\t", end='')
+                    else:
+                        print(instruction_str + "\t|\t", end='')
+
+                    left_padding = (list(cycles.keys()))[0]
+                    for tab in range(left_padding):
+                        print('\t', end='')
+
+                    previous_stage = None
+                    for cycle, stage in cycles.items():
+                        is_stall = (previous_stage and stage == previous_stage)
+                        if is_stall:
+                            print('S\t', end='')
+                        else:
+                            print(Cpu.Pipeline.PipelineStage.to_str(stage) + '\t', end='')
+
+                        previous_stage = stage
+
+                    print("")
+
         def __init__(self):
             self._pipeline = {
                 self.PipelineStage.IF: Bubble(),
@@ -34,11 +109,22 @@ class Cpu:
                 self.PipelineStage.MEM: Bubble(),
                 self.PipelineStage.WB: Bubble(),
             }
+            self._pipeline_ids = {
+                self.PipelineStage.IF: -5,
+                self.PipelineStage.ID: -4,
+                self.PipelineStage.EX: -3,
+                self.PipelineStage.MEM: -2,
+                self.PipelineStage.WB: -1,
+            }
+            self._id_counter = 0
+            self._pipeline_chronogram = self.PipelineChronogram()
 
         def fetch(self, next_instruction: Instruction):
             self.__move(self.PipelineStage.IF, self.PipelineStage.ID)
             logger.info("Loading into IF stage instruction '%s'." % next_instruction)
             self.__set(self.PipelineStage.IF, next_instruction)
+            self._pipeline_ids[self.PipelineStage.IF] = self._id_counter
+            self._id_counter += 1
 
         def decode(self):
             """
@@ -83,7 +169,7 @@ class Cpu:
             halt_instruction_found = False
             no_more_instructions = True
 
-            for phase, instruction in self._pipeline.items():
+            for stage, instruction in self._pipeline.items():
                 if halt_instruction_found:
                     if not isinstance(instruction, Bubble):  # Normal instruction detected after HALT
                         no_more_instructions = False
@@ -95,27 +181,42 @@ class Cpu:
 
         def flush(self):
             """
-            Replaces the instruction in the IF phase with a Bubble
+            Replaces the instruction in the IF stage with a Bubble
             """
             self.__set(self.PipelineStage.IF, Bubble())
 
-        def stall(self, phase):
+        def stall(self, stage):
             """
-            Instead of moving the instruction of the current phase to the next one,
-            a bubble is inserted in the next phase and the instructions
-            of the previous phases are neither moved nor executed.
+            Instead of moving the instruction of the current stage to the next one,
+            a bubble is inserted in the next stage and the instructions
+            of the previous stages are neither moved nor executed.
             """
-            if phase == self.PipelineStage.WB:
+            if stage == self.PipelineStage.WB:
                 """ Programming error """
                 raise RuntimeError
 
-            self.__set(phase+1, Bubble())
+            self.__set(stage + 1, Bubble())
+
+        def increase_cycle(self):
+            self._pipeline_chronogram.increase_cycle()
+
+        def update_chronogram(self):
+            for stage in self._pipeline.keys():
+                instruction = self._pipeline[stage]
+                instruction_id = self._pipeline_ids[stage]
+
+                if isinstance(instruction, Instruction) and not isinstance(instruction, Bubble):
+                    self._pipeline_chronogram.set_instruction_stage(instruction_id, instruction.__str__(), stage)
+
+        def print_chronogram(self):
+            self._pipeline_chronogram.print()
 
         def __move(self, stage_src, stage_dst):
-            logger.info("Moving from phase %s to phase %s instruction '%s' ."
+            logger.info("Moving from stage %s to stage %s instruction '%s' ."
                         % (stage_src, stage_dst, self._pipeline[stage_src]))
 
             self._pipeline[stage_dst] = self._pipeline[stage_src]
+            self._pipeline_ids[stage_dst] = self._pipeline_ids[stage_src]
 
         def __get(self, stage):
             return self._pipeline[stage]
@@ -124,12 +225,12 @@ class Cpu:
             self._pipeline[stage] = instruction
 
         def __repr__(self):
-            return ("\n1. %s\n2. %s\n3. %s\n4. %s\n5. %s" %
-                    (self.__get(self.PipelineStage.IF),
-                     self.__get(self.PipelineStage.ID),
-                     self.__get(self.PipelineStage.EX),
-                     self.__get(self.PipelineStage.MEM),
-                     self.__get(self.PipelineStage.WB)))
+            return ("1. %s \t[%d]\n2. %s \t[%d]\n3. %s \t[%d]\n4. %s \t[%d]\n5. %s \t[%d]" %
+                    (self.__get(self.PipelineStage.IF), self._pipeline_ids[self.PipelineStage.IF],
+                     self.__get(self.PipelineStage.ID), self._pipeline_ids[self.PipelineStage.ID],
+                     self.__get(self.PipelineStage.EX), self._pipeline_ids[self.PipelineStage.EX],
+                     self.__get(self.PipelineStage.MEM), self._pipeline_ids[self.PipelineStage.MEM],
+                     self.__get(self.PipelineStage.WB), self._pipeline_ids[self.PipelineStage.WB],))
 
     def __init__(self, registers: RegisterSet, memory: Memory):
         self._registers = registers
@@ -145,20 +246,20 @@ class Cpu:
         if self.is_halted():
             raise HaltedCpuError()
 
-        logger.info("Processing step %d." % _statistics['cycles'])
-        current_phase = None
+        logger.info("Processing cycle %d." % _statistics['cycles'])
+        current_stage = None
 
         try:
-            current_phase = self.Pipeline.PipelineStage.WB
+            current_stage = self.Pipeline.PipelineStage.WB
             self._pipeline.writeback()
 
-            current_phase = self.Pipeline.PipelineStage.MEM
+            current_stage = self.Pipeline.PipelineStage.MEM
             self._pipeline.memory()
 
-            current_phase = self.Pipeline.PipelineStage.EX
+            current_stage = self.Pipeline.PipelineStage.EX
             self._pipeline.execute()
 
-            current_phase = self.Pipeline.PipelineStage.ID
+            current_stage = self.Pipeline.PipelineStage.ID
             self._pipeline.decode()
 
             if self.is_running():
@@ -172,7 +273,7 @@ class Cpu:
                 " Programming error "
                 raise RuntimeError()
 
-            current_phase = self.Pipeline.PipelineStage.IF
+            current_stage = self.Pipeline.PipelineStage.IF
             self._pipeline.fetch(next_instruction)
 
         except HaltSignal:
@@ -185,7 +286,7 @@ class Cpu:
 
         except RawDependencySignal:
             logger.info("RAW dependency signal received.")
-            self._pipeline.stall(current_phase)
+            self._pipeline.stall(current_stage)
 
         except JumpSignal as s:
             logger.info("Jump signal received.")
@@ -207,9 +308,13 @@ class Cpu:
 
         finally:
             logger.info(self._pipeline)
-            logger.info("Step done.\n\n")
+            logger.info("Cycle done.\n\n")
+
+            self._pipeline.update_chronogram()
+            self._pipeline.increase_cycle()
 
             if self.is_stopping() and self._pipeline.is_empty():
+                self._pipeline.print_chronogram()
                 self.set_halted()
 
             _statistics['cycles'] += 1

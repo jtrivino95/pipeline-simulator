@@ -31,9 +31,11 @@ class Register(object):
     def is_locked(self):
         return self._semaphore > 0
 
+    def __str__(self):
+        return "R%d" % self._register_id
+
     def __repr__(self):
         return "R%d[%d][Locked: %s]" % (self._register_id, self._data, self.is_locked())
-        # return "R%d" % self._register_id
 
 
 class RegisterSet(object):
