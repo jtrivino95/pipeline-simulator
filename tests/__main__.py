@@ -1,6 +1,5 @@
 import unittest
-import configparser
-from pipeline_simulator.core import memories, cpu, instructions
+from pipeline_simulator.core import memories, architectures, instructions
 
 
 class TestPipelineMethods(unittest.TestCase):
@@ -69,7 +68,7 @@ class TestPipelineMethods(unittest.TestCase):
         parser = instructions.Parser(registers=registers, memory=memory)
         program = parser.parse(source_file)
         memory.write_program(program)
-        cpu_instance = cpu.Cpu(registers=registers, memory=memory)
+        cpu_instance = architectures.PipelinedCpu(registers=registers, memory=memory)
 
         memory.set(99, 0)
         memory.set(100, 0)
@@ -105,7 +104,7 @@ class TestPipelineMethods(unittest.TestCase):
         parser = instructions.Parser(registers=registers, memory=memory)
         program = parser.parse(source_file)
         memory.write_program(program)
-        cpu_instance = cpu.Cpu(registers=registers, memory=memory)
+        cpu_instance = architectures.PipelinedCpu(registers=registers, memory=memory)
 
         registers.get(0).set(0)
         registers.get(1).set(1)

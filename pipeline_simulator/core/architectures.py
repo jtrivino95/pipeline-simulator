@@ -13,6 +13,11 @@ _statistics = {
 
 
 class Cpu:
+    def __init__(self, phase_cycles: list):
+        self._PHASE_CYCLES = phase_cycles
+
+
+class PipelinedCpu(Cpu):
 
     class CpuStatus:
         RUNNING = 0
@@ -92,16 +97,16 @@ class Cpu:
                     previous_stage = None
                     for cycle, stage in cycles.items():
                         is_stall = (previous_stage and stage == previous_stage)
-                        if is_stall:
+                        if False:
                             print('S\t', end='')
                         else:
-                            print(Cpu.Pipeline.PipelineStage.to_str(stage) + '\t', end='')
+                            print(PipelinedCpu.Pipeline.PipelineStage.to_str(stage) + '\t', end='')
 
                         previous_stage = stage
 
                     print("")
 
-        def __init__(self):
+        def __init__(self, phase_cycles):
             self._pipeline = {
                 self.PipelineStage.IF: Bubble(),
                 self.PipelineStage.ID: Bubble(),
@@ -115,6 +120,14 @@ class Cpu:
                 self.PipelineStage.EX: -3,
                 self.PipelineStage.MEM: -2,
                 self.PipelineStage.WB: -1,
+            }
+            self._phase_cycles = phase_cycles
+            self._remaining_cycles = {
+                self.PipelineStage.IF: phase_cycles[0],
+                self.PipelineStage.ID: phase_cycles[1],
+                self.PipelineStage.EX: phase_cycles[2],
+                self.PipelineStage.MEM: phase_cycles[3],
+                self.PipelineStage.WB: phase_cycles[4],
             }
             self._id_counter = 0
             self._pipeline_chronogram = self.PipelineChronogram()
@@ -131,6 +144,14 @@ class Cpu:
             It is possible that decode() throws a HaltSignal, the instruction will be moved from ID to EX anyway
             """
             instruction = self.__get(self.PipelineStage.ID)
+
+            # Only count cycles if is not a Bubble
+            if not isinstance(instruction, Bubble):
+                if self.__get_remaining_cycles(self.PipelineStage.ID) > 1:
+                    self.__decrease_remaining_cycles(self.PipelineStage.ID)
+                    raise StageNotFinishedSignal
+                else:
+                    self.__reset_remaining_cycles(self.PipelineStage.ID)
 
             try:
                 signal = None
@@ -149,17 +170,43 @@ class Cpu:
 
         def execute(self):
             instruction = self.__get(self.PipelineStage.EX)
+
+            # Only count cycles if is not a Bubble
+            if not isinstance(instruction, Bubble):
+                if self.__get_remaining_cycles(self.PipelineStage.EX) > 1:
+                    self.__decrease_remaining_cycles(self.PipelineStage.EX)
+                    raise StageNotFinishedSignal
+                else:
+                    self.__reset_remaining_cycles(self.PipelineStage.EX)
+
             instruction.execute()
             self.__move(self.PipelineStage.EX, self.PipelineStage.MEM)
 
         def memory(self):
             instruction = self.__get(self.PipelineStage.MEM)
+
+            # Only count cycles if is not a Bubble
+            if not isinstance(instruction, Bubble):
+                if self.__get_remaining_cycles(self.PipelineStage.MEM) > 1:
+                    self.__decrease_remaining_cycles(self.PipelineStage.MEM)
+                    raise StageNotFinishedSignal
+                else:
+                    self.__reset_remaining_cycles(self.PipelineStage.MEM)
+
             instruction.memory()
             self.__move(self.PipelineStage.MEM, self.PipelineStage.WB)
 
         def writeback(self):
             instruction = self.__get(self.PipelineStage.WB)
             instruction.writeback()
+
+            # Only count cycles if is not a Bubble
+            if not isinstance(instruction, Bubble):
+                if self.__get_remaining_cycles(self.PipelineStage.WB) > 1:
+                    self.__decrease_remaining_cycles(self.PipelineStage.WB)
+                    raise StageNotFinishedSignal
+                else:
+                    self.__reset_remaining_cycles(self.PipelineStage.WB)
 
             if not isinstance(instruction, Bubble):
                 _statistics['instructions'] += 1
@@ -191,11 +238,8 @@ class Cpu:
             a bubble is inserted in the next stage and the instructions
             of the previous stages are neither moved nor executed.
             """
-            if stage == self.PipelineStage.WB:
-                """ Programming error """
-                raise RuntimeError
-
-            self.__set(stage + 1, Bubble())
+            if stage != self.PipelineStage.WB:
+                self.__set(stage + 1, Bubble())
 
         def increase_cycle(self):
             self._pipeline_chronogram.increase_cycle()
@@ -224,6 +268,15 @@ class Cpu:
         def __set(self, stage, instruction: Instruction):
             self._pipeline[stage] = instruction
 
+        def __get_remaining_cycles(self, stage):
+            return self._remaining_cycles[stage]
+
+        def __decrease_remaining_cycles(self, stage):
+            self._remaining_cycles[stage] -= 1
+
+        def __reset_remaining_cycles(self, stage):
+            self._remaining_cycles[stage] = self._phase_cycles[stage-1]  # Phase ID - 1 = phase cycles list's index
+
         def __repr__(self):
             return ("1. %s \t[%d]\n2. %s \t[%d]\n3. %s \t[%d]\n4. %s \t[%d]\n5. %s \t[%d]" %
                     (self.__get(self.PipelineStage.IF), self._pipeline_ids[self.PipelineStage.IF],
@@ -232,12 +285,14 @@ class Cpu:
                      self.__get(self.PipelineStage.MEM), self._pipeline_ids[self.PipelineStage.MEM],
                      self.__get(self.PipelineStage.WB), self._pipeline_ids[self.PipelineStage.WB],))
 
-    def __init__(self, registers: RegisterSet, memory: Memory):
+    def __init__(self, registers: RegisterSet, memory: Memory, show_chronogram=False, *args, **kwargs):
+        super(PipelinedCpu, self).__init__(*args, **kwargs)
         self._registers = registers
         self._memory = memory
         self._pc = 0
-        self._pipeline = self.Pipeline()
+        self._pipeline = self.Pipeline(self._PHASE_CYCLES)
         self._status = self.CpuStatus.HALTED
+        self._show_chronogram = show_chronogram
 
     def start(self):
         self.set_running()
@@ -306,6 +361,9 @@ class Cpu:
 
             self._pipeline.fetch(next_instruction)
 
+        except StageNotFinishedSignal:
+            self._pipeline.stall(current_stage)
+
         finally:
             logger.info(self._pipeline)
             logger.info("Cycle done.\n\n")
@@ -314,7 +372,8 @@ class Cpu:
             self._pipeline.increase_cycle()
 
             if self.is_stopping() and self._pipeline.is_empty():
-                self._pipeline.print_chronogram()
+                if self._show_chronogram:
+                    self._pipeline.print_chronogram()
                 self.set_halted()
 
             _statistics['cycles'] += 1
@@ -342,4 +401,8 @@ class Cpu:
 
 
 class HaltedCpuError(Exception):
+    pass
+
+
+class StageNotFinishedSignal(Exception):
     pass
