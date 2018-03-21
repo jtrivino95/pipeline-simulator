@@ -45,10 +45,17 @@ class RegisterSet(object):
         for i in range(num_registers):
             self._registers.append(Register(i))
 
+        from .compilers import Parser, InstructionSyntaxError
+        p = Parser(self, None)
         if registers_file:
             with open(registers_file, 'r') as f:
-                for i, value in enumerate(f):
-                    self._registers[i].set(int(value))
+                for line in f:
+                    try:
+                        (register_alias, value) = line.split("=")
+                        register = p.parse_register(register_alias)
+                        register.set(int(value))
+                    except ValueError:
+                        raise ValueError("Linea mal formada en archivo de registros.")
 
     def get(self, register_id):
         try:

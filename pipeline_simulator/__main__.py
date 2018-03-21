@@ -1,12 +1,13 @@
 from pipeline_simulator.core import memories, architectures, instructions
-import logging, sys
+import logging
+import sys
 
 
 class Main:
 
     def run(self):
-        # logging.basicConfig(stream=sys.stdout, level='INFO')
-        show_chronogram = True
+        logging.basicConfig(stream=sys.stdout, level='INFO')
+        show_chronogram = False
 
         source_file = 'tests/programs/code1.txt'
         registers = memories.RegisterSet(registers_file='tests/programs/registers1.txt')
