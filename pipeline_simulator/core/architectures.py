@@ -13,7 +13,7 @@ _statistics = {
 
 
 class Cpu:
-    def __init__(self, phase_cycles: list):
+    def __init__(self, phase_cycles=[1, 1, 1, 1, 1]):
         self._PHASE_CYCLES = phase_cycles
 
 
@@ -278,7 +278,7 @@ class PipelinedCpu(Cpu):
             self._remaining_cycles[stage] = self._phase_cycles[stage-1]  # Phase ID - 1 = phase cycles list's index
 
         def __repr__(self):
-            return ("1. %s \t[%d]\n2. %s \t[%d]\n3. %s \t[%d]\n4. %s \t[%d]\n5. %s \t[%d]" %
+            return ("\n1. %s \t[%d]\n2. %s \t[%d]\n3. %s \t[%d]\n4. %s \t[%d]\n5. %s \t[%d]" %
                     (self.__get(self.PipelineStage.IF), self._pipeline_ids[self.PipelineStage.IF],
                      self.__get(self.PipelineStage.ID), self._pipeline_ids[self.PipelineStage.ID],
                      self.__get(self.PipelineStage.EX), self._pipeline_ids[self.PipelineStage.EX],
