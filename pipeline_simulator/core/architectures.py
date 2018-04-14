@@ -1,6 +1,6 @@
 import logging
 import collections
-from .instructions import Instruction, HaltInstruction, Bubble, HaltSignal, RawDependencySignal, JumpSignal
+from .instructions import Instruction, HaltInstruction, Bubble, HaltSignal, RawDependencySignal, JumpSignal, FunctionalUnitNotFinishedSignal
 from .memories import Memory, RegisterSet
 
 
@@ -354,7 +354,7 @@ class PipelinedCpu(Cpu):
 
             self._pipeline.fetch(next_instruction)
 
-        except StageNotFinishedSignal:
+        except (StageNotFinishedSignal, FunctionalUnitNotFinishedSignal):
             self._pipeline.stall(current_stage)
 
         finally:

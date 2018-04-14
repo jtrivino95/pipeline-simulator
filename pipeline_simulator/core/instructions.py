@@ -42,12 +42,20 @@ class AluInstruction(Instruction):
         'DIV',
     ]
 
+    fu_cycles = {
+        'ADD': 1,
+        'MULT': 1,
+        'SUB': 1,
+        'DIV': 1
+    }
+
     def __init__(self, opcode, rs: memories.Register, rt: memories.Register, rd: memories.Register):
         self._opcode = opcode
         self._rs = rs
         self._rt = rt
         self._rd = rd
         self._tmp = None  # Used for store results before writing them to rd on WB phase
+        self._remaining_cycles = self.fu_cycles[self._opcode] - 1
 
     def decode(self):
         super(AluInstruction, self).decode()
@@ -56,6 +64,10 @@ class AluInstruction(Instruction):
         self._rd.lock()
 
     def execute(self):
+        if self._remaining_cycles > 0:
+            self._remaining_cycles -= 1
+            raise FunctionalUnitNotFinishedSignal
+
         super(AluInstruction, self).execute()
         if self._opcode == 'ADD':
             self._tmp = self._rs.get_data() + self._rt.get_data()
@@ -246,3 +258,6 @@ class RawDependencySignal(Exception):
 class JumpSignal(Exception):
     def __init__(self, addr):
         self.addr = addr
+
+class FunctionalUnitNotFinishedSignal(Exception):
+    pass
