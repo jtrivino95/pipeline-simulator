@@ -47,7 +47,7 @@ class PipelinedCpu(Cpu):
                     return 'W'
                 else:
                     " Programming error "
-                    raise RuntimeError()
+                    raise RuntimeError
 
         class PipelineChronogram:
 
@@ -94,15 +94,8 @@ class PipelinedCpu(Cpu):
                     for tab in range(left_padding):
                         print('\t', end='')
 
-                    previous_stage = None
                     for cycle, stage in cycles.items():
-                        is_stall = (previous_stage and stage == previous_stage)
-                        if False:
-                            print('S\t', end='')
-                        else:
-                            print(PipelinedCpu.Pipeline.PipelineStage.to_str(stage) + '\t', end='')
-
-                        previous_stage = stage
+                        print(PipelinedCpu.Pipeline.PipelineStage.to_str(stage) + '\t', end='')
 
                     print("")
 
@@ -299,7 +292,7 @@ class PipelinedCpu(Cpu):
 
     def step(self):
         if self.is_halted():
-            raise HaltedCpuError()
+            raise HaltedCpuError
 
         logger.info("Processing cycle %d." % _statistics['cycles'])
         current_stage = None
@@ -326,7 +319,7 @@ class PipelinedCpu(Cpu):
                 next_instruction = Bubble()
             else:
                 " Programming error "
-                raise RuntimeError()
+                raise RuntimeError
 
             current_stage = self.Pipeline.PipelineStage.IF
             self._pipeline.fetch(next_instruction)
@@ -357,7 +350,7 @@ class PipelinedCpu(Cpu):
                 next_instruction = Bubble()
             else:
                 " Programming error "
-                raise RuntimeError()
+                raise RuntimeError
 
             self._pipeline.fetch(next_instruction)
 

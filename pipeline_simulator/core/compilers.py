@@ -64,9 +64,10 @@ class Parser:
 
     _dependency_analyzer = DependencyAnalyzer()
 
-    def __init__(self, registers: memories.RegisterSet, memory: memories.Memory):
+    def __init__(self, registers: memories.RegisterSet, memory: memories.Memory, print_dependencies=False):
         self._registers = registers
         self._memory = memory
+        self._print_dependencies = print_dependencies
 
     def parse_register(self, alias):
         return self.__get_register(alias)
@@ -97,7 +98,8 @@ class Parser:
         logger.info("Parsed %d instructions successfully." % nline)
 
         self._dependency_analyzer.analyze()
-        self._dependency_analyzer.print()
+        if self._print_dependencies:
+            self._dependency_analyzer.print()
 
         return program
 

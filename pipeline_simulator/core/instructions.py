@@ -52,7 +52,7 @@ class AluInstruction(Instruction):
     def decode(self):
         super(AluInstruction, self).decode()
         if self._rs.is_locked() or self._rt.is_locked():
-            raise RawDependencySignal()
+            raise RawDependencySignal
         self._rd.lock()
 
     def execute(self):
@@ -101,12 +101,12 @@ class MemInstruction(Instruction):
         super(MemInstruction, self).decode()
         if self._opcode == 'LOAD':
             if self._rs.is_locked():
-                raise RawDependencySignal()
+                raise RawDependencySignal
             self._rd.lock()
 
         else:  # self._opcode == STORE
             if self._rs.is_locked() or self._rd.is_locked():
-                raise RawDependencySignal()
+                raise RawDependencySignal
 
     def execute(self):
         super(MemInstruction, self).execute()
@@ -142,7 +142,7 @@ class MemInstruction(Instruction):
             return [self._rs, self._rd]
 
         else:
-            raise RuntimeError()
+            raise RuntimeError
 
     def get_written_registers(self):
         if self._opcode == 'LOAD':
@@ -152,7 +152,7 @@ class MemInstruction(Instruction):
             return []
 
         else:
-            raise RuntimeError()
+            raise RuntimeError
 
     def __repr__(self):
         return "%s %s, %d(%s)" % (self._opcode, self._rd, self._offset, self._rs)
@@ -172,7 +172,7 @@ class BranchInstruction(Instruction):
 
     def decode(self):
         if self._rs.is_locked() or self._rt.is_locked():
-            raise RawDependencySignal()
+            raise RawDependencySignal
 
         if self._opcode == 'BEQ':
             if self._rs.get_data() == self._rt.get_data():
@@ -226,7 +226,7 @@ class HaltInstruction(Instruction):
         return "%s" % self._opcode
 
     def decode(self):
-        raise HaltSignal()
+        raise HaltSignal
 
     def get_read_registers(self):
         return []
