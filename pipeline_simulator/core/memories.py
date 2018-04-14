@@ -35,7 +35,8 @@ class Register(object):
         return "R%d" % self._register_id
 
     def __repr__(self):
-        return "R%d[%d][Locked: %s]" % (self._register_id, self._data, self.is_locked())
+        # return "R%d[%d][Locked: %s]" % (self._register_id, self._data, self.is_locked())
+        return "R%d" % (self._register_id)
 
 
 class RegisterSet(object):

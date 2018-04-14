@@ -5,10 +5,64 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+class DependencyAnalyzer:
+
+    _tmp = []
+    _count = 0
+    _raw = []
+    _waw = []
+    _war = []
+
+    def add_instruction(self, inst: instructions.Instruction):
+        self._tmp.append(inst)
+
+    def analyze(self):
+        for i, instruction1 in enumerate(self._tmp):
+            for j, instruction2 in enumerate(self._tmp[i+1:]):
+                # RAW
+                for inst1_register in instruction1.get_written_registers():
+                    for inst2_register in instruction2.get_read_registers():
+                        if inst1_register == inst2_register:
+                            self._raw.append((instruction1, instruction2, inst1_register))
+
+                # WAW
+                for inst1_register in instruction1.get_written_registers():
+                    for inst2_register in instruction2.get_written_registers():
+                        if inst1_register == inst2_register:
+                            self._waw.append((instruction1, instruction2, inst1_register))
+
+                # WAR
+                for inst1_register in instruction1.get_read_registers():
+                    for inst2_register in instruction2.get_written_registers():
+                        if inst1_register == inst2_register:
+                            self._war.append((instruction1, instruction2, inst1_register))
+
+    def print(self):
+        print("-----------------")
+        print("Dependencyas RAW")
+        print("-----------------")
+        for dependency in self._raw:
+            print("%s -> %s [por %s]" % dependency)
+
+        print("-----------------")
+        print("Dependencias WAW")
+        print("-----------------")
+        for dependency in self._waw:
+            print("%s -> %s [por %s]" % dependency)
+
+        print("-----------------")
+        print("Dependencias WAR")
+        print("-----------------")
+        for dependency in self._war:
+            print("%s -> %s [por %s]" % dependency)
+
+
 class Parser:
 
     _instruction_regex = r"^((?P<label>\w*):\s)?(?P<opcode>\w*)\s*(?P<op1>[a-zA-Z0-9|(|)]*)?(,\s" \
             r"*(?P<op2>[a-zA-Z0-9|(|)]*))?(,\s*(?P<op3>\w*))?([\s|\t]*#.*)?$"
+
+    _dependency_analyzer = DependencyAnalyzer()
 
     def __init__(self, registers: memories.RegisterSet, memory: memories.Memory):
         self._registers = registers
@@ -36,10 +90,14 @@ class Parser:
         with open(filepath, 'r') as f:
             for line in f:
                 instruction = self.__parse_line(line, nline, labels)
+                self._dependency_analyzer.add_instruction(instruction)
                 program.append(instruction)
                 nline += 1
 
         logger.info("Parsed %d instructions successfully." % nline)
+
+        self._dependency_analyzer.analyze()
+        self._dependency_analyzer.print()
 
         return program
 

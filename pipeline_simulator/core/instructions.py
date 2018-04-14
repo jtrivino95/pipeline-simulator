@@ -22,6 +22,12 @@ class Instruction:
     def writeback(self):
         logger.info("Executing writeback phase of instruction " + self.__repr__())
 
+    def get_read_registers(self):
+        pass
+
+    def get_written_registers(self):
+        pass
+
 
 class Bubble(Instruction):
     def __repr__(self):
@@ -65,6 +71,12 @@ class AluInstruction(Instruction):
         super(AluInstruction, self).writeback()
         self._rd.unlock()
         self._rd.set(self._tmp)
+
+    def get_read_registers(self):
+        return [self._rs, self._rt]
+
+    def get_written_registers(self):
+        return [self._rd]
 
     def __repr__(self):
         return "%s %s, %s, %s" % (self._opcode, self._rd, self._rs, self._rt)
@@ -122,6 +134,26 @@ class MemInstruction(Instruction):
         else:
             pass
 
+    def get_read_registers(self):
+        if self._opcode == 'LOAD':
+            return [self._rs]
+
+        elif self._opcode == 'STORE':
+            return [self._rs, self._rd]
+
+        else:
+            raise RuntimeError()
+
+    def get_written_registers(self):
+        if self._opcode == 'LOAD':
+            return [self._rd]
+
+        elif self._opcode == 'STORE':
+            return []
+
+        else:
+            raise RuntimeError()
+
     def __repr__(self):
         return "%s %s, %d(%s)" % (self._opcode, self._rd, self._offset, self._rs)
 
@@ -150,6 +182,12 @@ class BranchInstruction(Instruction):
             if self._rs.get_data() != self._rt.get_data():
                 raise JumpSignal(self._imm)
 
+    def get_read_registers(self):
+        return [self._rs, self._rt]
+
+    def get_written_registers(self):
+        return []
+
     def __repr__(self):
         return "%s %s, %s, 0x%x" % (self._opcode, self._rs, self._rt, self._imm)
 
@@ -165,6 +203,12 @@ class JumpInstruction(Instruction):
 
     def decode(self):
         raise JumpSignal(self._imm)
+
+    def get_read_registers(self):
+        return []
+
+    def get_written_registers(self):
+        return []
 
     def __repr__(self):
         return "%s 0x%x" % (self._opcode, self._imm)
@@ -183,6 +227,12 @@ class HaltInstruction(Instruction):
 
     def decode(self):
         raise HaltSignal()
+
+    def get_read_registers(self):
+        return []
+
+    def get_written_registers(self):
+        return []
 
 
 class HaltSignal(Exception):

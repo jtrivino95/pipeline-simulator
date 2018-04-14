@@ -1,3 +1,4 @@
 Detectar etiquetas sin usar
 Implementar segmentacion > 1
-Implementar multiplicidad en las fases
+Latencia variable para cada tipo de operacion
+Hacer prediccion TAKEN
