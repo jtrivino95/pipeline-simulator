@@ -1,0 +1,13 @@
+Tabla para CENTRALIZADA Y POR TIPOS
+
+PARAMETROS A VARIAR (LOS VA A VARIAR LA PROFE)
+1) Carga
+- CPU
+- MEM
+- SALTOS
+2) N registros fisicos
+3) Tam memoria
+4) Latencias fases de pipeline
+5) Escalabilidad
+6) Tam Unidades funcionales
+5) Latencia 
