@@ -14,8 +14,44 @@ _statistics = {
 
 
 class Cpu:
-    def __init__(self, phase_cycles=(1, 1, 1, 1, 1)):
+    def __init__(self, registers: RegisterSet, memory: Memory, phase_cycles=(1, 1, 1, 1, 1)):
         self._PHASE_CYCLES = phase_cycles
+        self._status = self.CpuStatus.HALTED
+        self._registers = registers
+        self._memory = memory
+        self._pc = 0
+
+    class CpuStatus:
+        RUNNING = 0
+        STOPPING = 1
+        HALTED = 2
+
+    def start(self):
+        self.set_running()
+
+    def step(self):
+        pass
+
+    def is_halted(self):
+        return self._status == self.CpuStatus.HALTED
+
+    def is_running(self):
+        return self._status == self.CpuStatus.RUNNING
+
+    def is_stopping(self):
+        return self._status == self.CpuStatus.STOPPING
+
+    def set_halted(self):
+        logger.info("CPU status is now HALTED.")
+        self._status = self.CpuStatus.HALTED
+
+    def set_stopping(self):
+        logger.info("CPU status is now STOPPING.")
+        self._status = self.CpuStatus.STOPPING
+
+    def set_running(self):
+        logger.info("CPU status is now RUNNING.")
+        self._status = self.CpuStatus.RUNNING
 
 
 class PipelineChronogram:
@@ -277,23 +313,11 @@ class Pipeline:
 
 class PipelinedCpu(Cpu):
 
-    class CpuStatus:
-        RUNNING = 0
-        STOPPING = 1
-        HALTED = 2
-
-    def __init__(self, registers: RegisterSet, memory: Memory, show_chronogram=False, *args, **kwargs):
+    def __init__(self, show_chronogram=False, *args, **kwargs):
         super(PipelinedCpu, self).__init__(*args, **kwargs)
-        self._registers = registers
-        self._memory = memory
-        self._pc = 0
         self._pipeline_chronogram = PipelineChronogram()
         self._pipeline = Pipeline(self._PHASE_CYCLES, self._pipeline_chronogram)
-        self._status = self.CpuStatus.HALTED
         self._show_chronogram = show_chronogram
-
-    def start(self):
-        self.set_running()
 
     def step(self):
         if self.is_halted():
@@ -376,26 +400,13 @@ class PipelinedCpu(Cpu):
 
             _statistics['cycles'] += 1
 
-    def is_halted(self):
-        return self._status == self.CpuStatus.HALTED
 
-    def is_running(self):
-        return self._status == self.CpuStatus.RUNNING
+class CentralizedReservationStationsCpu(Cpu):
+    pass
 
-    def is_stopping(self):
-        return self._status == self.CpuStatus.STOPPING
 
-    def set_halted(self):
-        logger.info("CPU status is now HALTED.")
-        self._status = self.CpuStatus.HALTED
-
-    def set_stopping(self):
-        logger.info("CPU status is now STOPPING.")
-        self._status = self.CpuStatus.STOPPING
-
-    def set_running(self):
-        logger.info("CPU status is now RUNNING.")
-        self._status = self.CpuStatus.RUNNING
+class DecentralizedReservationStationsByInstructionsCpu(Cpu):
+    pass
 
 
 class HaltedCpuError(Exception):
