@@ -81,6 +81,9 @@ class Parser:
         nline = 0
         with open(filepath, 'r') as f:
             for line in f:
+                if line.startswith('#'):  # Skip comments
+                    continue
+
                 label = self.__check_label(line, nline)
                 if label:
                     labels[label] = nline
@@ -90,6 +93,9 @@ class Parser:
         nline = 0
         with open(filepath, 'r') as f:
             for line in f:
+                if line.startswith('#'):  # Skip comments
+                    continue
+
                 instruction = self.__parse_line(line, nline, labels)
                 self._dependency_analyzer.add_instruction(instruction)
                 program.append(instruction)
