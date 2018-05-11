@@ -15,7 +15,8 @@ _statistics = {
 
 class Cpu:
 
-    def __init__(self, registers: RegisterSet, memory: Memory, scalability=1, phase_cycles=(1, 1, 1, 1, 1), show_chronogram=False):
+    def __init__(self, registers: RegisterSet, memory: Memory, scalability=1, phase_cycles=(1, 1, 1, 1, 1),
+                 show_chronogram=False):
         self._PHASE_CYCLES = phase_cycles
         self._status = self.CpuStatus.HALTED
         self._registers = registers
@@ -280,7 +281,6 @@ class Pipeline:
             if isinstance(instruction, Instruction) and not isinstance(instruction, Bubble):
                 self._pipeline_chronogram.set_instruction_stage(instruction_id, instruction.__str__(), stage)
 
-
     def __move(self, stage_src, stage_dst):
         logger.info("Moving from stage %s to stage %s instruction '%s' ."
                     % (stage_src, stage_dst, self._pipeline[stage_src]))
@@ -405,8 +405,8 @@ class ExecutionUnit:
 
     _latency = 1
 
-    def __init__(self, id, chronogram):
-        self._id = id
+    def __init__(self, eu_id, chronogram):
+        self._id = eu_id
         self._instruction = None
         self._instruction_id = None
         self._execution_finished = False
@@ -425,7 +425,8 @@ class ExecutionUnit:
 
         if self._execution_finished:
             logger.info("Processing writeback of instruction %s" % self._instruction)
-            self._chronogram.set_instruction_stage(self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.WB)
+            self._chronogram.set_instruction_stage(
+                self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.WB)
             self._instruction.writeback()
             self._instruction = None
             self._instruction_id = None
@@ -433,7 +434,8 @@ class ExecutionUnit:
             self._execution_finished = False
 
         else:
-            self._chronogram.set_instruction_stage(self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.EX)
+            self._chronogram.set_instruction_stage(
+                self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.EX)
             logger.info("Cycles remaining to execute: %d" % self._remaining_cycles)
 
             if self._remaining_cycles > 0:
@@ -609,7 +611,8 @@ class CentralizedRSCpu(ReservationStationsCpu):
 
                 self._pc += 1
                 instruction_id = self._shelving_buffer.add(next_instruction)
-                self._chronogram.set_instruction_stage(instruction_id, next_instruction.__str__(), Pipeline.PipelineStage.IF)
+                self._chronogram.set_instruction_stage(
+                    instruction_id, next_instruction.__str__(), Pipeline.PipelineStage.IF)
 
         self._shelving_buffer.dispatch_next_instruction_to_eu()
 
@@ -623,7 +626,7 @@ class CentralizedRSCpu(ReservationStationsCpu):
         for eu in self._execution_units:
             if eu.has_halt():
                 continue
-            elif not eu.is_free():  # todo
+            elif not eu.is_free():
                 all_eu_empty = False
 
         return all_eu_empty
