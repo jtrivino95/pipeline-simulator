@@ -124,6 +124,24 @@ class TestPipelineMethods(unittest.TestCase):
         self.assertEqual(registers.get(3).get_data(), 3)
         self.assertEqual(memory.get_data(1003), 3)
 
+    def test_tomasulo_code3(self):
+        source_file = 'tests/programs/code3.txt'
+        registers = memories.RegisterSet(registers_file='tests/programs/registers3.txt')
+        memory = memories.Memory(2048)
+        parser = compilers.Parser(registers=registers, memory=memory)
+        program = parser.parse(source_file)
+        memory.write_program(program)
+        cpu_instance = architectures.CentralizedRSCpu(registers=registers, memory=memory)
+
+        cpu_instance.start()
+        while not cpu_instance.is_halted():
+            cpu_instance.step()
+
+        self.assertEqual(registers.get(1).get_data(), 5)
+        self.assertEqual(registers.get(2).get_data(), -1)
+        self.assertEqual(registers.get(3).get_data(), 3)
+        self.assertEqual(memory.get_data(1003), 3)
+
     def test_tomasulo_code5(self):
         source_file = 'tests/programs/code5.txt'
         registers = memories.RegisterSet(registers_file='tests/programs/registers5.txt')
