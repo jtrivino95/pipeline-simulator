@@ -28,6 +28,12 @@ class Instruction:
     def get_written_registers(self):
         pass
 
+    def has_dependencies(self):
+        return False
+    
+    def get_opcode(self):
+        return self._opcode
+
 
 class Bubble(Instruction):
     def __repr__(self):
@@ -90,6 +96,9 @@ class AluInstruction(Instruction):
     def get_written_registers(self):
         return [self._rd]
 
+    def has_dependencies(self):
+        return self._rs.is_locked() or self._rt.is_locked()
+
     def __repr__(self):
         return "%s %s, %s, %s" % (self._opcode, self._rd, self._rs, self._rt)
 
@@ -100,6 +109,11 @@ class MemInstruction(Instruction):
         'STORE',
     ]
 
+    fu_cycles = {
+        'LOAD': 1,
+        'STORE': 1,
+    }
+
     def __init__(self, opcode, rs: memories.Register, rd: memories.Register, offset: int, memory: memories.Memory):
         self._opcode = opcode
         self._rs = rs
@@ -108,6 +122,7 @@ class MemInstruction(Instruction):
         self._computed_mem_addr = None
         self._tmp = None
         self._memory = memory
+        self._remaining_cycles = MemInstruction.fu_cycles[self._opcode] - 1
 
     def decode(self):
         super(MemInstruction, self).decode()
@@ -121,6 +136,10 @@ class MemInstruction(Instruction):
                 raise RawDependencySignal
 
     def execute(self):
+        if self._remaining_cycles > 0:
+            self._remaining_cycles -= 1
+            raise FunctionalUnitNotFinishedSignal
+
         super(MemInstruction, self).execute()
         if self._opcode == 'LOAD':
             self._computed_mem_addr = self._rs.get_data() + self._offset
@@ -165,6 +184,13 @@ class MemInstruction(Instruction):
 
         else:
             raise RuntimeError
+
+    def has_dependencies(self):
+        if self._opcode == 'LOAD':
+            return self._rs.is_locked()
+
+        else:  # self._opcode == STORE
+            return self._rs.is_locked() or self._rd.is_locked()
 
     def __repr__(self):
         return "%s %s, %d(%s)" % (self._opcode, self._rd, self._offset, self._rs)
@@ -258,6 +284,7 @@ class RawDependencySignal(Exception):
 class JumpSignal(Exception):
     def __init__(self, addr):
         self.addr = addr
+
 
 class FunctionalUnitNotFinishedSignal(Exception):
     pass
