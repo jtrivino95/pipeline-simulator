@@ -69,6 +69,8 @@ class Chronogram:
         self._current_cycle += 1
 
     def set_instruction_stage(self, instruction_id, instruction_str, stage):
+        logger.info("Saving to chronogram instruction [%s] at stage [%s] at cycle [%d]"
+                    % (instruction_str, Pipeline.PipelineStage.to_str(stage), self._current_cycle))
         self.__add_instruction(instruction_id, instruction_str)
         self._chronogram[instruction_id][self._current_cycle] = stage
 
@@ -403,57 +405,48 @@ class PipelinedCpu(Cpu):
 
 class ExecutionUnit:
 
-    latency = 1
-
     def __init__(self, eu_id, chronogram):
         self._id = eu_id
         self._instruction = None
         self._instruction_id = None
-        self._execution_finished = False
+        self._stage = Pipeline.PipelineStage.ID
         self._chronogram = chronogram
-        self._remaining_cycles = self.__class__.latency - 1
 
     def add(self, instruction: Instruction, instruction_id: int):
         self._instruction = instruction
         self._instruction_id = instruction_id
+        self.__update_chronogram()
 
-    def execute(self):
+    def execute(self, only_update_chronogram=False):
         if not self._instruction:
             logger.info("Execution unit #%d has no instruction to execute" % self._id)
             return
 
-        if self._execution_finished:
-            logger.info("Executing unit #%d: Processing writeback")
-            self._chronogram.set_instruction_stage(
-                self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.WB)
-            self._instruction.writeback()
-            self._instruction = None
-            self._instruction_id = None
-            self.__reset_remaining_cycles()
-            self._execution_finished = False
+        if only_update_chronogram:
+            self.__update_chronogram()
+            return
+
+        if self._stage == Pipeline.PipelineStage.WB:
+            self.__update_chronogram()
+            self.__writeback()
+            self.__update_stage()
+
+        elif self._stage == Pipeline.PipelineStage.EX:
+            self.__update_chronogram()
+            self.__execute()
+            self.__update_stage()
+
+        elif self._stage == Pipeline.PipelineStage.ID:
+            self.__update_chronogram()
+            self.__decode()
+            self.__update_stage()
+
+            self.__update_chronogram()
+            self.__execute()
+            self.__update_stage()
 
         else:
-            logger.info("Executing unit #%d [Remaining cycles: %d]" % (self._id, self._remaining_cycles))
-            self._chronogram.set_instruction_stage(
-                self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.EX)
-
-            if self._remaining_cycles > 0:
-                self._remaining_cycles -= 1
-                return
-
-            try:
-                self._instruction.decode()
-                self._instruction.execute()
-                self._instruction.memory()
-                self._execution_finished = True
-
-            except RawDependencySignal:
-                logger.info("Received RawDependencySignal signal")
-                return
-
-            except FunctionalUnitNotFinishedSignal:
-                logger.info("Received FunctionalUnitNotFinishedSignal signal")
-                return
+            raise RuntimeError
 
     def allows(self, instruction: Instruction):
         return instruction.get_opcode() == 'HALT'
@@ -473,8 +466,34 @@ class ExecutionUnit:
         else:
             return -1
 
-    def __reset_remaining_cycles(self):
-        self._remaining_cycles = self.__class__.latency - 1
+    def __decode(self):
+        logger.info("Executing unit #%d: Decoding" % self._id)
+        self._instruction.decode()
+
+    def __execute(self):
+        logger.info("Executing unit #%d: Executing" % self._id)
+        self._instruction.execute()
+        self._instruction.memory()
+
+    def __writeback(self):
+        logger.info("Executing unit #%d: Writebacking" % self._id)
+        self._instruction.writeback()
+        self._instruction = None
+        self._instruction_id = None
+
+    def __update_stage(self):
+        if self._stage == Pipeline.PipelineStage.ID:
+            self._stage = Pipeline.PipelineStage.EX
+
+        elif self._stage == Pipeline.PipelineStage.EX:
+            self._stage = Pipeline.PipelineStage.WB
+
+        elif self._stage == Pipeline.PipelineStage.WB:
+            self._stage = Pipeline.PipelineStage.ID
+
+    def __update_chronogram(self):
+        self._chronogram.set_instruction_stage(
+            self._instruction_id, self._instruction.__str__(), self._stage)
 
     def __repr__(self):
         return "#%d [%s]: Instruction: %s" % (self._id, self.__class__, self._instruction)
@@ -507,10 +526,11 @@ class MemoryExecutionUnit(ExecutionUnit):
 class ShelvingBuffer:
     _id_counter = 0
 
-    def __init__(self, execution_units):
+    def __init__(self, execution_units, chronogram):
         self._buffer = []
         self._buffer_ids = []
         self._execution_units = execution_units
+        self._chronogram = chronogram
 
     def add(self, instruction: Instruction):
         instruction_id = ShelvingBuffer._id_counter
@@ -546,6 +566,11 @@ class ShelvingBuffer:
     def is_empty(self):
         return len(self._buffer) == 0
 
+    def update_chronogram(self):
+        for i, instruction in enumerate(self._buffer):
+            self._chronogram.set_instruction_stage(
+                self._buffer_ids[i], instruction.__str__(), Pipeline.PipelineStage.IF)
+
 
 class ReservationStationsCpu(Cpu):
 
@@ -564,7 +589,7 @@ class CentralizedRSCpu(ReservationStationsCpu):
             MultExecutionUnit(2, self._chronogram),
             MemoryExecutionUnit(3, self._chronogram),
         ]
-        self._shelving_buffer = ShelvingBuffer(self._execution_units)
+        self._shelving_buffer = ShelvingBuffer(self._execution_units, self._chronogram)
 
     def step(self):
         if self.is_halted():
@@ -602,16 +627,26 @@ class CentralizedRSCpu(ReservationStationsCpu):
                     break  # Ugly fix
 
                 self._pc += 1
-                instruction_id = self._shelving_buffer.add(next_instruction)
-                self._chronogram.set_instruction_stage(
-                    instruction_id, next_instruction.__str__(), Pipeline.PipelineStage.IF)
+                self._shelving_buffer.add(next_instruction)
 
         self._shelving_buffer.dispatch_next_instruction_to_eu()
+        self._shelving_buffer.update_chronogram()
 
     def __execute(self):
         logger.info("Execution units status:\n" + "\n".join(map(str, self._execution_units)))
+        only_update_chronogram = False
         for execution_unit in sorted(self._execution_units, key=lambda x: x.get_instruction_id()):
-            execution_unit.execute()
+            try:
+                execution_unit.execute(only_update_chronogram)
+
+            except RawDependencySignal:
+                logger.info("RawDependencySignal received")
+                only_update_chronogram = True
+                continue
+
+            except FunctionalUnitNotFinishedSignal:
+                logger.info("FunctionalUnitNotFinishedSignal received")
+                continue
 
     def __all_eu_empty(self):
         all_eu_empty = True

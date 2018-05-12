@@ -65,7 +65,7 @@ class AluInstruction(Instruction):
 
     def decode(self):
         super(AluInstruction, self).decode()
-        if self._rs.is_locked() or self._rt.is_locked():
+        if self.has_dependencies():
             raise RawDependencySignal
         self._rd.lock()
 
@@ -126,14 +126,11 @@ class MemInstruction(Instruction):
 
     def decode(self):
         super(MemInstruction, self).decode()
-        if self._opcode == 'LOAD':
-            if self._rs.is_locked():
-                raise RawDependencySignal
-            self._rd.lock()
+        if self.has_dependencies():
+            raise RawDependencySignal
 
-        else:  # self._opcode == STORE
-            if self._rs.is_locked() or self._rd.is_locked():
-                raise RawDependencySignal
+        if self._opcode == 'LOAD':
+            self._rd.lock()
 
     def execute(self):
         if self._remaining_cycles > 0:
@@ -209,7 +206,7 @@ class BranchInstruction(Instruction):
         self._imm = imm
 
     def decode(self):
-        if self._rs.is_locked() or self._rt.is_locked():
+        if self.has_dependencies():
             raise RawDependencySignal
 
         if self._opcode == 'BEQ':
