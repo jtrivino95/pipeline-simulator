@@ -403,7 +403,7 @@ class PipelinedCpu(Cpu):
 
 class ExecutionUnit:
 
-    _latency = 1
+    latency = 1
 
     def __init__(self, eu_id, chronogram):
         self._id = eu_id
@@ -411,20 +411,19 @@ class ExecutionUnit:
         self._instruction_id = None
         self._execution_finished = False
         self._chronogram = chronogram
-        self._remaining_cycles = self.__class__._latency - 1
+        self._remaining_cycles = self.__class__.latency - 1
 
     def add(self, instruction: Instruction, instruction_id: int):
         self._instruction = instruction
         self._instruction_id = instruction_id
 
     def execute(self):
-        logger.info("Executing unit #%d" % self._id)
         if not self._instruction:
             logger.info("Execution unit #%d has no instruction to execute" % self._id)
             return
 
         if self._execution_finished:
-            logger.info("Processing writeback of instruction %s" % self._instruction)
+            logger.info("Executing unit #%d: Processing writeback")
             self._chronogram.set_instruction_stage(
                 self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.WB)
             self._instruction.writeback()
@@ -434,16 +433,15 @@ class ExecutionUnit:
             self._execution_finished = False
 
         else:
+            logger.info("Executing unit #%d [Remaining cycles: %d]" % (self._id, self._remaining_cycles))
             self._chronogram.set_instruction_stage(
                 self._instruction_id, self._instruction.__str__(), Pipeline.PipelineStage.EX)
-            logger.info("Cycles remaining to execute: %d" % self._remaining_cycles)
 
             if self._remaining_cycles > 0:
                 self._remaining_cycles -= 1
                 return
 
             try:
-                logger.info("Decoding and executing instruction %s" % self._instruction)
                 self._instruction.decode()
                 self._instruction.execute()
                 self._instruction.memory()
@@ -476,15 +474,13 @@ class ExecutionUnit:
             return -1
 
     def __reset_remaining_cycles(self):
-        self._remaining_cycles = self.__class__._latency - 1
+        self._remaining_cycles = self.__class__.latency - 1
 
     def __repr__(self):
         return "#%d [%s]: Instruction: %s" % (self._id, self.__class__, self._instruction)
 
 
 class AddExecutionUnit(ExecutionUnit):
-
-    _latency = 1
 
     def allows(self, instruction: Instruction):
         return super(AddExecutionUnit, self).allows(instruction) or \
@@ -494,8 +490,6 @@ class AddExecutionUnit(ExecutionUnit):
 
 class MultExecutionUnit(ExecutionUnit):
 
-    _latency = 1
-
     def allows(self, instruction: Instruction):
         return super(MultExecutionUnit, self).allows(instruction) or \
                instruction.get_opcode() == 'MULT' or \
@@ -503,8 +497,6 @@ class MultExecutionUnit(ExecutionUnit):
 
 
 class MemoryExecutionUnit(ExecutionUnit):
-
-    _latency = 1
 
     def allows(self, instruction: Instruction):
         return super(MemoryExecutionUnit, self).allows(instruction) or \
@@ -581,8 +573,8 @@ class CentralizedRSCpu(ReservationStationsCpu):
         try:
             logger.info("Processing cycle %d." % _statistics['cycles'])
 
-            self.__issue()
             self.__execute()
+            self.__issue()
 
         except HaltSignal:
             logger.info("Halt signal received.")
